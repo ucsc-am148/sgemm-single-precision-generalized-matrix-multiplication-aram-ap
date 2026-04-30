@@ -1,17 +1,22 @@
 """Local sanity check for the hw-sgemm kernels.
 
-Runs each kernel from kernels.py at a small size and compares against
-numpy A @ B. Reports max abs error per kernel + a rough timing.
+Runs each kernel from kernels.py at one square shape and two
+asymmetric (M != N) shapes, comparing against numpy A @ B. Reports
+max abs error per kernel + a rough timing. The asymmetric shapes
+catch a common class of bug where you swap blockIdx.x / blockIdx.y
+in your kernel; with square inputs gridDim ends up the same in both
+directions and the bug hides.
 
-This is NOT the autograder. It only verifies correctness and prints a
-ballpark GFLOPs number; the Modal autograder runs additional shapes and
-enforces a per-kernel performance floor. Passing locally does not mean
-passing on Modal.
+This is NOT the autograder. It verifies correctness and prints a
+ballpark GFLOPs number; the Modal autograder runs additional shapes
+and enforces a per-kernel performance floor. Passing locally is
+necessary but not sufficient for a passing grade.
 
-Until you implement K2-K5, those kernels will leave C as zeros and show
-up as FAIL. K1 (worked example) should PASS as soon as you run this.
+Until you implement K2-K5, those kernels will leave C as zeros and
+show up as FAIL. K1 (worked example) should PASS as soon as you run
+this.
 
-Usage: /home/quacker/am148/ml/bin/python sanity_check.py
+Usage: python sanity_check.py
 """
 import os
 import time
@@ -27,7 +32,11 @@ from numba import cuda
 import kernels
 
 
-SIZES = [(256, 256, 256), (512, 512, 512)]
+SIZES = [
+    (256, 256, 256),    # square baseline
+    (768, 256, 512),    # M > N: catches blockIdx.x/y axis confusion bugs
+    (256, 768, 512),    # N > M: mirror — same class of bug, opposite direction
+]
 TOL = 1e-2   # max abs error tolerance (lenient — fp32 roundoff at this size)
 
 
