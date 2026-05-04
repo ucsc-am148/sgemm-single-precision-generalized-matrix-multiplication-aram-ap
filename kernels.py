@@ -105,7 +105,30 @@ def sgemm_smem(A, B, C, M, N, K):
     (BK3, BN3) for Bs.
     Use 0.0 in the SMEM load when the global index is out of bounds.
     """
-    # TODO
+
+    As = cuda.shared.array((BM3, BK3), dtype=float32)
+    Bs = cuda.shared.array((BK3, BN3), dtype=float32)
+
+    thread_id_x = cuda.threadIdx.x
+    row_in_tile = thread_id_x // BN3
+    col_in_tile = thread_id_x % BN3
+
+    row = cuda.blockIdx.x * BM3 + row_in_tile
+    col = cuda.blockIdx.y * BN3 + col_in_tile
+
+    tmp = float32(0.0)
+    for i in range(0, K, BK3):
+        As[row_in_tile, col_in_tile] = A[row, col_in_tile + i]
+        Bs[row_in_tile, col_in_tile] = B[row_in_tile + i, col]
+        cuda.syncthreads()
+
+        for k in range(BK3):
+            tmp += As[row_in_tile, k] * Bs[k, col_in_tile]
+
+        cuda.syncthreads()
+
+    C[row, col] = tmp
+
     return
 
 
