@@ -226,14 +226,6 @@ def sgemm_2d_tile(A, B, C, M, N, K):
     Numba supports tuple-shaped local arrays!
     """
 
-    As = cuda.shared.array((BM5, BK5), dtype=float32)
-    Bs = cuda.shared.array((BK5, BN5), dtype=float32)
-
-    tx = cuda.threadIdx.x
-
-    thread_col = tx % (BN5 // TN5)
-    thread_row = tx // (BN5 // TN5)
-
     # BM5*BK5 = 1024 A elements / 256 threads = 4 loads on each--same for B.
     NUM_THREADS = (BM5*BN5) // (TM5*TN5) # 256 threads per block
     NUM_A_ELEM = (BM5 * BK5) // NUM_THREADS # 4 
@@ -241,10 +233,18 @@ def sgemm_2d_tile(A, B, C, M, N, K):
     A_ROW_STRIDE = NUM_THREADS // BK5 # 32: 256 threads / 8 K-columns=32 rows per pass
     B_ROW_STRIDE = NUM_THREADS // BN5 # 2: 256 threads / 128 N-columns = 2 rows per pass
 
+    As = cuda.shared.array((BM5, BK5), dtype=float32)
+    Bs = cuda.shared.array((BK5, BN5), dtype=float32)
+
+    tx = cuda.threadIdx.x
+    thread_col = tx % (BN5 // TN5)
+    thread_row = tx // (BN5 // TN5)
+
     c_col = cuda.blockIdx.x * BN5
     c_row = cuda.blockIdx.y * BM5
 
-    a_row, a_col = tx // BK5, tx % BK5
+    # row/col index for loading A/B
+    a_row, a_col = tx // BK5, tx % BK5 
     b_row, b_col = tx // BN5, tx % BN5
 
     accum = cuda.local.array((TM5, TN5), float32)
