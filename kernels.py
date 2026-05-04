@@ -226,9 +226,9 @@ def sgemm_2d_tile(A, B, C, M, N, K):
     Numba supports tuple-shaped local arrays!
     """
 
-    # BM5*BK5 = 1024 A elements / 256 threads = 4 loads on each--same for B.
     NUM_THREADS = (BM5*BN5) // (TM5*TN5) # 256 threads per block
-    NUM_A_ELEM = (BM5 * BK5) // NUM_THREADS # 4 
+    # BM5*BK5 = 1024 A elements / 256 threads = 4 loads on each--same for B.
+    NUM_A_ELEM = (BM5 * BK5) // NUM_THREADS # 4
     NUM_B_ELEM = (BK5 * BN5) // NUM_THREADS # 4
     A_ROW_STRIDE = NUM_THREADS // BK5 # 32: 256 threads / 8 K-columns=32 rows per pass
     B_ROW_STRIDE = NUM_THREADS // BN5 # 2: 256 threads / 128 N-columns = 2 rows per pass
