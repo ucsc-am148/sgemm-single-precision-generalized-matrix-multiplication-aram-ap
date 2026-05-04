@@ -125,8 +125,8 @@ def sgemm_smem(A, B, C, M, N, K):
     # Loop over K dimension in chunks of BK3
     for i in range(0, K, BK3):
         # load A and B tiles into shared memory
-        As[row_in_tile, col_in_tile] = A[row, col_in_tile + i]
-        Bs[row_in_tile, col_in_tile] = B[row_in_tile + i, col]
+        As[row_in_tile, col_in_tile] = A[row, col_in_tile + i] if (row < M and col_in_tile + i < K) else float32(0.0)
+        Bs[row_in_tile, col_in_tile] = B[row_in_tile + i, col] if (row_in_tile + i < K and col < N) else float32(0.0)
         cuda.syncthreads()
 
         # dot the row of As into the column of Bs to update the per-thread accumulator
