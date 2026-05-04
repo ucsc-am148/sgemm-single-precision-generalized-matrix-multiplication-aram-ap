@@ -124,7 +124,7 @@ def sgemm_smem(A, B, C, M, N, K):
 
     # Loop over K dimension in chunks of BK3
     for i in range(0, K, BK3):
-        # load A and B tiles into shared memory
+        # load A and B tiles into shared memory within bounds
         As[row_in_tile, col_in_tile] = A[row, col_in_tile + i] if (row < M and col_in_tile + i < K) else float32(0.0)
         Bs[row_in_tile, col_in_tile] = B[row_in_tile + i, col] if (row_in_tile + i < K and col < N) else float32(0.0)
         cuda.syncthreads()
@@ -135,7 +135,8 @@ def sgemm_smem(A, B, C, M, N, K):
 
         cuda.syncthreads()
 
-    C[row, col] = tmp
+    if row < M and col < N:
+        C[row, col] = tmp
 
     return
 
@@ -224,8 +225,68 @@ def sgemm_2d_tile(A, B, C, M, N, K):
     For accumulators, use cuda.local.array((TM5, TN5), float32).
     Numba supports tuple-shaped local arrays!
     """
-    # TODO
-    return
+
+    As = cuda.shared.array((BM5, BK5), dtype=float32)
+    Bs = cuda.shared.array((BK5, BN5), dtype=float32)
+
+    tx = cuda.threadIdx.x
+
+    thread_col = tx % (BN5 // TN5)
+    thread_row = tx // (BN5 // TN5)
+
+    # BM5*BK5 = 1024 A elements / 256 threads = 4 loads on each--same for B.
+    NUM_THREADS = (BM5*BN5) // (TM5*TN5) # 256 threads per block
+    NUM_A_ELEM = (BM5 * BK5) // NUM_THREADS # 4 
+    NUM_B_ELEM = (BK5 * BN5) // NUM_THREADS # 4
+    A_ROW_STRIDE = NUM_THREADS // BK5 # 32: 256 threads / 8 K-columns=32 rows per pass
+    B_ROW_STRIDE = NUM_THREADS // BN5 # 2: 256 threads / 128 N-columns = 2 rows per pass
+
+    c_col = cuda.blockIdx.x * BN5
+    c_row = cuda.blockIdx.y * BM5
+
+    a_row, a_col = tx // BK5, tx % BK5
+    b_row, b_col = tx // BN5, tx % BN5
+
+    accum = cuda.local.array((TM5, TN5), float32)
+    for m in range(TM5):     # Initialize accum with 0.0f
+        for n in range(TN5):
+            accum[m, n] = float32(0.0)
+    
+    for k in range(0, K, BK5):
+        # Load A tile
+        for s in range(NUM_A_ELEM):
+            lr = a_row + s * A_ROW_STRIDE
+            As[lr, a_col] = A[c_row + lr, k + a_col] if (c_row + lr < M and k + a_col < K) else float32(0.0)
+        # Load B tile
+        for s in range(NUM_B_ELEM):
+            lr = b_row + s * B_ROW_STRIDE
+            Bs[lr, b_col] = B[k + lr, c_col + b_col] if (k + lr < K and c_col + b_col < N) else float32(0.0)
+
+        cuda.syncthreads()
+
+        for j in range(BK5):
+            # Cache column of As and row of Bs into registers
+            reg_a = cuda.local.array(TM5, dtype=float32)
+            reg_b = cuda.local.array(TN5, dtype=float32)
+
+            for m in range(TM5):
+                reg_a[m] = As[thread_row * TM5 + m, j]
+            for n in range(TN5):
+                reg_b[n] = Bs[j, thread_col * TN5 + n]
+            # Calculate outer product with each (m, n) pair
+            for m in range(TM5):
+                for n in range(TN5):
+                    accum[m, n] += reg_a[m] * reg_b[n]
+
+        cuda.syncthreads()
+    
+    # Write register tile back to global mem
+    for m in range(TM5):
+        for n in range(TN5):
+            gr = c_row + thread_row * TM5 + m
+            gc = c_col + thread_col * TN5 + n
+            if gr < M and gc < N:
+                C[gr, gc] = accum[m, n]
 
 
 # ── Launch wrappers (provided — do not edit) ────────────────────────
