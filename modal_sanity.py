@@ -25,11 +25,13 @@ image = (
         "numpy==2.4.4",
         "numba==0.65.0",
         "numba-cuda==0.30.0",
+        "cupy-cuda12x==14.0.1",
     )
     .env({"NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS": "0"})
     # add_local_* must be the LAST build steps.
     .add_local_file(str(HERE / "kernels.py"),       "/app/kernels.py")
     .add_local_file(str(HERE / "sanity_check.py"),  "/app/sanity_check.py")
+    .add_local_file(str(HERE / "kernel6_stretch.cu"), "/app/kernel6_stretch.cu")
 )
 
 app = modal.App("sgemm-student-sanity", image=image)

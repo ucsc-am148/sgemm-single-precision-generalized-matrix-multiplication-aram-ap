@@ -321,6 +321,22 @@ def run_k5(A, B, C, M, N, K):
     block = ((BM5 * BN5) // (TM5 * TN5),)
     sgemm_2d_tile[grid, block](A, B, C, M, N, K)
 
+import cupy as cp, pathlib
+
+_k6_kernel = None
+
+def run_k6(A, B, C, M, N, K):
+    global _k6_kernel
+    if _k6_kernel is None:
+        code = (pathlib.Path(__file__).resolve().parent / "kernel6_stretch.cu").read_text()
+        _k6_kernel = cp.RawKernel(code, "sgemm_vectorize",
+                                  options=("-std=c++17", "--use_fast_math"))
+    grid = (math.ceil(N / 128), math.ceil(M / 128))
+    dA = cp.asarray(A)
+    dB = cp.asarray(B)
+    dC = cp.asarray(C)
+    _k6_kernel(grid, (256,), (dA, dB, dC, M, N, K))
+
 
 # Graded kernels in the order the rubric uses (1/4 → C, 2/4 → B-, ...).
 KERNELS = [
@@ -328,4 +344,5 @@ KERNELS = [
     ("k3_smem",     run_k3),
     ("k4_1d_tile",  run_k4),
     ("k5_2d_tile",  run_k5),
+    ("k6_vectorize", run_k6),
 ]
