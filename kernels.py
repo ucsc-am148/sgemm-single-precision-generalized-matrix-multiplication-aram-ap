@@ -321,11 +321,11 @@ def run_k5(A, B, C, M, N, K):
     block = ((BM5 * BN5) // (TM5 * TN5),)
     sgemm_2d_tile[grid, block](A, B, C, M, N, K)
 
-import cupy as cp, pathlib
 
 _k6_kernel = None
 
 def run_k6(A, B, C, M, N, K):
+    import cupy as cp, pathlib
     global _k6_kernel
     if _k6_kernel is None:
         code = (pathlib.Path(__file__).resolve().parent / "kernel6_stretch.cu").read_text()
