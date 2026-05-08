@@ -331,7 +331,8 @@ def run_k6(A, B, C, M, N, K):
         code = (pathlib.Path(__file__).resolve().parent / "kernel6_stretch.cu").read_text()
         _k6_kernel = cp.RawKernel(code, "sgemm_vectorize",
                                   options=("-std=c++17", "--use_fast_math"))
-    grid = (math.ceil(N / 128), math.ceil(M / 128))
+    BMN = 64
+    grid = (math.ceil(N / BMN), math.ceil(M / BMN))
     dA = cp.asarray(A)
     dB = cp.asarray(B)
     dC = cp.asarray(C)
